@@ -62,9 +62,12 @@ func (aj *AsyncJob) Run(listener func(job Job) error, data interface{}) (err err
 	return aj._Process()
 }
 
-// onEta allows you set callback function for ETA
-func (aj *AsyncJob) onEta(eta func(current int, total int, estimateTimeLeft time.Duration)) {
+// OnEta allows you set callback function for ETA
+func (aj *AsyncJob) OnEta(eta func(current int, total int, estimateTimeLeft time.Duration)) *AsyncJob {
 	aj.onEtaFunc = eta
+
+	// return current instance for chaining method
+	return aj
 }
 func (aj *AsyncJob) _Eta() {
 	// we save time if the anonymous function is not initialized
@@ -89,6 +92,8 @@ func (aj *AsyncJob) _Eta() {
 	// call the anonymous function with data
 	aj.onEtaFunc(aj.position, aj.jobs.Len(), time.Duration((time.Since(aj.eta).Milliseconds()/int64(aj.position))*int64(ret))*time.Millisecond)
 }
+
+// _Next allows you to retrieve the next job
 func (aj *AsyncJob) _Next() {
 	aj.Lock()
 	defer aj.Unlock()

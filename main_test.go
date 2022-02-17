@@ -116,12 +116,14 @@ func TestNew(t *testing.T) {
 			list = append(list, i)
 		}
 
-		err := New().Run(func(job Job) error {
-			m.Lock()
-			defer m.Unlock()
-			found[job.Index()] = job.Data().(int)
-			return nil
-		}, list)
+		err := New().
+			OnEta(func(current int, total int, estimateTimeLeft time.Duration) {}).
+			Run(func(job Job) error {
+				m.Lock()
+				defer m.Unlock()
+				found[job.Index()] = job.Data().(int)
+				return nil
+			}, list)
 
 		if !assert.Nil(t, err) {
 			return
@@ -226,5 +228,31 @@ func TestNew(t *testing.T) {
 
 		assert.Equal(t, final[7].Index(), 2)
 		assert.Equal(t, final[7].Data().(time.Duration), time.Duration(2)*time.Second)
+	})
+	t.Run("Testing eta", func(t *testing.T) {
+		var list []time.Duration
+		for i := 1; i <= 5; i++ {
+			list = append(list, time.Duration(1)*time.Second)
+		}
+		var result []float64
+		err := New().
+			SetConcurrency(2).
+			OnEta(func(current int, total int, estimateTimeLeft time.Duration) {
+				log.Print(current, total, estimateTimeLeft)
+				result = append(result, estimateTimeLeft.Seconds())
+			}).
+			Run(func(job Job) error {
+				time.Sleep(job.Data().(time.Duration))
+				return nil
+			}, list)
+
+		// test err if nil
+		if !assert.Nil(t, err) {
+			return
+		}
+		assert.True(t, result[0] >= 1.5 && result[0] <= 1.6)
+		assert.True(t, result[1] >= 0.600 && result[1] <= 0.700)
+		assert.True(t, result[2] >= 0.500 && result[2] <= 0.600)
+		t.Log(result)
 	})
 }
