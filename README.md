@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/lab210-dev/async-job/blob/main/LICENSE)
 # Overview
 
-AsyncJob is an asynchronous job manager with light code and clear and speed. I hope so ! 😬
+AsyncJob is an asynchronous job manager with light code, clear and speed. I hope so ! 😬
 
 ## Features
 
@@ -13,12 +13,44 @@ AsyncJob is an asynchronous job manager with light code and clear and speed. I h
 - [x] Async queue
 - [x] Define the number of asynchronous tasks (default: runtime.NumCPU())
 - [x] Handling of managed and unmanaged errors
-- [ ] Provide a simple ETA
-- [ ] Full code description
+- [x] Provide a simple ETA
+- [x] Full code description
 
 ### Usage
 
-In progress... 🤔
+```go
+package main
+
+import (
+	"github.com/lab210-dev/async-job"
+	"log"
+)
+
+func main() {
+	// Create a new AsyncJob
+	asj := asyncjob.New()
+
+	// Set the number of asynchronous tasks (default: runtime.NumCPU())
+	asj.SetWorkers(2)
+
+	// Listen to the progress status
+	asj.OnProgress(func(progress asyncjob.Progress) {
+		log.Printf("Progress: %s\n", progress.String())
+	})
+
+	// Run all jobs 
+	err := asj.Run(func(job asyncjob.Job) error {
+        // receive the job in job data function
+        // if err return or panic, the job will be marked as failed and all progress will be canceled
+        return nil
+    }, []string{"Hello", "World"})
+
+	// if a job returns an error, it stops the process
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+```
 
 ## 🤝 Contributions
 Contributors to the application are encouraged to help improve the code.
