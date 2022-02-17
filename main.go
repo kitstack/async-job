@@ -12,16 +12,14 @@ import (
 type AsyncJob struct {
 	sync.Mutex
 	sync.WaitGroup
-	concurrency         int
-	onJob               func(job Job) error
-	onEtaFunc           func(current int, total int, estimateTimeLeft time.Duration)
-	jobs                reflect.Value
-	position            int
-	queueJob            chan Job
-	waitingCompleteJobs chan bool
-	queueUsage          int
-	errors              chan error
-	eta                 time.Time
+	workers        int
+	onJob          func(job Job) error
+	onProgressFunc func(progress Progress)
+	jobs           reflect.Value
+	position       int
+	queueJob       chan Job
+	errors         chan error
+	startTimer     time.Time
 }
 
 // New allows you to retrieve a new instance of AsyncJob
@@ -29,22 +27,22 @@ func New() *AsyncJob {
 	// new instance of AsyncJob
 	aj := new(AsyncJob)
 	// set default concurrency with num cpu value
-	aj.SetConcurrency(runtime.NumCPU())
+	aj.SetWorkers(runtime.NumCPU())
 	// create channel for jobs error
 	aj.errors = make(chan error)
 
 	return aj
 }
 
-// SetConcurrency allows you to set the number of asynchronous jobs
-func (aj *AsyncJob) SetConcurrency(concurrency int) *AsyncJob {
-	aj.concurrency = concurrency
+// SetWorkers allows you to set the number of asynchronous jobs
+func (aj *AsyncJob) SetWorkers(concurrency int) *AsyncJob {
+	aj.workers = concurrency
 	return aj
 }
 
-// GetConcurrency allows you to retrieve the number and value of asynchronous tasks
-func (aj *AsyncJob) GetConcurrency() int {
-	return aj.concurrency
+// GetWorkers allows you to retrieve the number of workers
+func (aj *AsyncJob) GetWorkers() int {
+	return aj.workers
 }
 
 // Run allows you to start the process
@@ -62,16 +60,16 @@ func (aj *AsyncJob) Run(listener func(job Job) error, data interface{}) (err err
 	return aj._Process()
 }
 
-// OnEta allows you set callback function for ETA
-func (aj *AsyncJob) OnEta(eta func(current int, total int, estimateTimeLeft time.Duration)) *AsyncJob {
-	aj.onEtaFunc = eta
+// OnProgress allows you set callback function for ETA
+func (aj *AsyncJob) OnProgress(onProgressFunc func(progress Progress)) *AsyncJob {
+	aj.onProgressFunc = onProgressFunc
 
 	// return current instance for chaining method
 	return aj
 }
-func (aj *AsyncJob) _Eta() {
+func (aj *AsyncJob) _Progress() {
 	// we save time if the anonymous function is not initialized
-	if aj.onEtaFunc == nil {
+	if aj.onProgressFunc == nil {
 		return
 	}
 	// we secure the access struct data
@@ -79,7 +77,7 @@ func (aj *AsyncJob) _Eta() {
 	defer aj.Unlock()
 
 	// division by zero security
-	if time.Since(aj.eta).Milliseconds() == 0 {
+	if time.Since(aj.startTimer).Milliseconds() == 0 {
 		return
 	}
 	// jobs finished
@@ -90,7 +88,7 @@ func (aj *AsyncJob) _Eta() {
 	ret := aj.jobs.Len() - aj.position
 
 	// call the anonymous function with data
-	aj.onEtaFunc(aj.position, aj.jobs.Len(), time.Duration((time.Since(aj.eta).Milliseconds()/int64(aj.position))*int64(ret))*time.Millisecond)
+	aj.onProgressFunc(Progress{aj.position, aj.jobs.Len(), time.Duration((time.Since(aj.startTimer).Milliseconds()/int64(aj.position))*int64(ret)) * time.Millisecond})
 }
 
 // _Next allows you to retrieve the next job
@@ -114,51 +112,63 @@ func (aj *AsyncJob) _Process() error {
 		return nil
 	}
 
-	aj.eta = time.Now()
+	// start timer
+	aj.startTimer = time.Now()
+	// create channel for jobs
 	aj.queueJob = make(chan Job)
-	aj.waitingCompleteJobs = make(chan bool, 1)
 
+	// create channel for wait group
 	waitCh := make(chan bool, 1)
 	go func() {
+		// for each job into the queue
 		for job := range aj.queueJob {
 			go func(job Job) {
 				defer aj.Done()
+				// call the anonymous function for recovered error
 				defer func() {
 					if v := recover(); v != nil {
 						recoverErr, ok := v.(error)
 						if !ok {
 							recoverErr = fmt.Errorf("%s", v)
 						}
+						// we set the error
 						aj._SetError(recoverErr)
 						return
 					}
 				}()
+				// call the anonymous function for job
 				err := aj.onJob(job)
 				if err != nil {
+					// we set the error
 					aj._SetError(err)
 					return
 				}
-				aj._Eta()
+				// we notify the jobs progress
+				aj._Progress()
+				// we call the next job
 				aj._Next()
 			}(job)
 		}
 	}()
 
-	// Trigger first data
-	max := aj.GetConcurrency()
+	// the number of jobs for the start-up is calculated
+	max := aj.GetWorkers()
 	size := aj.jobs.Len()
 	if size <= max {
 		max = size
 	}
+	// we start the workers
 	for i := 0; i < max; i++ {
 		aj._Next()
 	}
 
+	// we wait for the end of the jobs
 	go func() {
 		aj.Wait()
 		close(waitCh)
 	}()
 
+	// we check the errors
 	var err error
 	select {
 	case v := <-aj.errors:
@@ -167,5 +177,6 @@ func (aj *AsyncJob) _Process() error {
 		break
 	}
 
+	// return the error
 	return err
 }

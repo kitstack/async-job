@@ -117,7 +117,7 @@ func TestNew(t *testing.T) {
 		}
 
 		err := New().
-			OnEta(func(current int, total int, estimateTimeLeft time.Duration) {}).
+			OnProgress(func(progress Progress) {}).
 			Run(func(job Job) error {
 				m.Lock()
 				defer m.Unlock()
@@ -184,13 +184,13 @@ func TestNew(t *testing.T) {
 		}
 		log.Print(list)
 		startTimer := time.Now()
-		err := New().SetConcurrency(2).Run(func(job Job) error {
+		err := New().SetWorkers(2).Run(func(job Job) error {
 			m.Lock()
-			t.Logf("Starting Index:%d Time:%f D:%d", job.Index(), time.Now().Sub(startTimer).Seconds(), job.Data().(time.Duration))
+			t.Logf("Starting Index:%d Time:%f D:%d", job.Index(), time.Since(startTimer).Seconds(), job.Data().(time.Duration))
 			final = append(final, job)
 			m.Unlock()
 			time.Sleep(job.Data().(time.Duration))
-			t.Logf("Ending Index:%d Time:%f D:%d", job.Index(), time.Now().Sub(startTimer).Seconds(), job.Data().(time.Duration))
+			t.Logf("Ending Index:%d Time:%f D:%d", job.Index(), time.Since(startTimer).Seconds(), job.Data().(time.Duration))
 			m.Lock()
 			final = append(final, job)
 			m.Unlock()
@@ -202,7 +202,7 @@ func TestNew(t *testing.T) {
 			return
 		}
 
-		assert.True(t, time.Now().Sub(startTimer).Seconds() >= 2)
+		assert.True(t, time.Since(startTimer).Seconds() >= 2)
 		log.Print(final)
 
 		assert.Equal(t, final[0].Data().(time.Duration), time.Duration(1)*time.Second)
@@ -236,10 +236,10 @@ func TestNew(t *testing.T) {
 		}
 		var result []float64
 		err := New().
-			SetConcurrency(2).
-			OnEta(func(current int, total int, estimateTimeLeft time.Duration) {
-				log.Print(current, total, estimateTimeLeft)
-				result = append(result, estimateTimeLeft.Seconds())
+			SetWorkers(2).
+			OnProgress(func(progress Progress) {
+				t.Log(progress.Current(), progress.Total(), progress.EstimateTimeLeft(), progress)
+				result = append(result, progress.EstimateTimeLeft().Seconds())
 			}).
 			Run(func(job Job) error {
 				time.Sleep(job.Data().(time.Duration))
