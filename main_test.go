@@ -55,6 +55,7 @@ func TestNew(t *testing.T) {
 		if !assert.NotNil(t, err) {
 			return
 		}
+		assert.Equal(t, "invalid input data : got int want: slice", err.Error())
 	})
 	t.Run("Run with valid listener", func(t *testing.T) {
 		var m sync.Mutex
@@ -156,7 +157,7 @@ func TestNew(t *testing.T) {
 
 		// calcul percentage of timer
 		percentage := float64(endTimer.Sub(startTimer)) / float64(d)
-		t.Logf("slowness margin (>5%%)= %f (%s)", percentage, endTimer.Sub(startTimer))
+		t.Logf("slowness margin (>5%%)= %.2f%% (%s)", percentage, endTimer.Sub(startTimer))
 
 		// test if percentage is greater than 95%
 		assert.True(t, percentage < 5)
