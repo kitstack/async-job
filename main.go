@@ -10,8 +10,8 @@ import (
 
 // AsyncJob is a representation of AsyncJob processus
 type AsyncJob struct {
-	sync.Mutex
-	sync.WaitGroup
+	mu             sync.Mutex
+	wg             sync.WaitGroup
 	workers        int
 	onJob          func(job Job) error
 	onProgressFunc func(progress Progress)
@@ -35,8 +35,8 @@ func New() *AsyncJob {
 }
 
 // SetWorkers allows you to set the number of asynchronous jobs
-func (aj *AsyncJob) SetWorkers(concurrency int) *AsyncJob {
-	aj.workers = concurrency
+func (aj *AsyncJob) SetWorkers(workers int) *AsyncJob {
+	aj.workers = workers
 	return aj
 }
 
@@ -73,8 +73,8 @@ func (aj *AsyncJob) _Progress() {
 		return
 	}
 	// we secure the access struct data
-	aj.Lock()
-	defer aj.Unlock()
+	aj.mu.Lock()
+	defer aj.mu.Unlock()
 
 	// division by zero security
 	if time.Since(aj.startTimer).Milliseconds() == 0 {
@@ -93,13 +93,13 @@ func (aj *AsyncJob) _Progress() {
 
 // _Next allows you to retrieve the next job
 func (aj *AsyncJob) _Next() {
-	aj.Lock()
-	defer aj.Unlock()
+	aj.mu.Lock()
+	defer aj.mu.Unlock()
 
 	if aj.position == aj.jobs.Len() {
 		return
 	}
-	aj.Add(1)
+	aj.wg.Add(1)
 	aj.queueJob <- Job{index: aj.position, data: aj.jobs.Index(aj.position).Interface()}
 	aj.position = aj.position + 1
 }
@@ -111,7 +111,6 @@ func (aj *AsyncJob) _Process() error {
 	if aj.jobs.Len() == 0 {
 		return nil
 	}
-
 	// start timer
 	aj.startTimer = time.Now()
 	// create channel for jobs
@@ -123,7 +122,7 @@ func (aj *AsyncJob) _Process() error {
 		// for each job into the queue
 		for job := range aj.queueJob {
 			go func(job Job) {
-				defer aj.Done()
+				defer aj.wg.Done()
 				// call the anonymous function for recovered error
 				defer func() {
 					if v := recover(); v != nil {
@@ -164,7 +163,7 @@ func (aj *AsyncJob) _Process() error {
 
 	// we wait for the end of the jobs
 	go func() {
-		aj.Wait()
+		aj.wg.Wait()
 		close(waitCh)
 	}()
 
