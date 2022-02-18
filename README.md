@@ -35,22 +35,22 @@ func main() {
 
 	// Listen to the progress status
 	asj.OnProgress(func(progress asyncjob.Progress) {
-		log.Printf("Progress: %s\n", progress.String())
+            log.Printf("Progress: %s\n", progress.String())
 	})
 
 	// Run all jobs 
 	err := asj.Run(func(job asyncjob.Job) error {
-        // receive the job in job data function
-        // if err return or panic, the job will be marked as failed and all progress will be canceled
-        return nil
-    }, []string{"Hello", "World"})
+            // receive the job in job data function
+            // if err return or panic, the job will be marked as failed and all progress will be canceled
+            return nil
+	}, []string{"Hello", "World"})
 
 	// if a job returns an error, it stops the process
 	if err != nil {
-		log.Fatal(err)
+            log.Fatal(err)
 	}
 }
 ```
 
 ## 🤝 Contributions
-Contributors to the application are encouraged to help improve the code.
+Contributors to the package are encouraged to help improve the code.
