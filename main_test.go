@@ -3,9 +3,7 @@ package asyncjob
 import (
 	"errors"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
 	"log"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -14,24 +12,6 @@ import (
 // function for print log with testing instance
 func LogJob(t *testing.T, job Job) {
 	t.Logf("OnJob=%s key=%d", job.Data(), job.Index())
-}
-
-// function for capture stout
-func CaptureStdout(t *testing.T, f func()) string {
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stdout := os.Stdout
-	os.Stdout = w
-	f()
-	w.Close()
-	os.Stdout = stdout
-	out, err := ioutil.ReadAll(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(out)
 }
 
 func TestNew(t *testing.T) {
@@ -253,6 +233,36 @@ func TestNew(t *testing.T) {
 		assert.True(t, result[0] >= 1.5 && result[0] <= 1.6)
 		assert.True(t, result[1] >= 0.600 && result[1] <= 0.700)
 		assert.True(t, result[2] >= 0.500 && result[2] <= 0.600)
+		t.Log(result)
+	})
+	t.Run("Testing large eta", func(t *testing.T) {
+		var list []time.Duration
+		for i := 1; i <= 5000; i++ {
+			list = append(list, time.Duration(1)*time.Microsecond)
+		}
+		var result []float64
+		err := New().
+			SetWorkers(2).
+			OnProgress(func(progress Progress) {
+				if progress.Current()%1000 != 0 {
+					return
+				}
+				t.Log(progress.Current(), progress.Total(), progress.EstimateTimeLeft(), progress)
+				result = append(result, progress.EstimateTimeLeft().Seconds())
+			}).
+			Run(func(job Job) error {
+				time.Sleep(job.Data().(time.Duration))
+				return nil
+			}, list)
+
+		// test err if nil
+		if !assert.Nil(t, err) {
+			return
+		}
+		// verify all value into result
+		for _, v := range result {
+			assert.True(t, v != 0)
+		}
 		t.Log(result)
 	})
 }
