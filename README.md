@@ -52,5 +52,47 @@ func main() {
 }
 ```
 
+## 💡 For better performance
+
+Using a modulo to reduce the eta display (fast example)
+
+```go
+package main
+
+import (
+	"github.com/lab210-dev/async-job"
+	"log"
+	"time"
+)
+
+func main() {
+	// create slice of jobs
+	var list []time.Duration
+	for i := 1; i <= 100; i++ {
+		list = append(list, time.Duration(1)*time.Millisecond)
+	}
+	err := asyncjob.New().
+		SetWorkers(2).
+		OnProgress(func(progress asyncjob.Progress) {
+			// Eta will be displayed every 10 jobs
+			if progress.Current()%10 != 0 {
+				return
+			}
+			// print the eta
+		    log.Printf("Progress: %s\n", progress.String())
+		}).
+		Run(func(job asyncjob.Job) error {
+			// slow down the job
+			time.Sleep(job.Data().(time.Duration))
+			return nil
+		}, list)
+	
+	// if a job returns an error, it stops the process
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
 ## 🤝 Contributions
 Contributors to the package are encouraged to help improve the code.

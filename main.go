@@ -88,7 +88,7 @@ func (aj *AsyncJob) _Progress() {
 	ret := aj.jobs.Len() - aj.position
 
 	// call the anonymous function with data
-	aj.onProgressFunc(Progress{aj.position, aj.jobs.Len(), time.Duration((time.Since(aj.startTimer).Milliseconds()/int64(aj.position))*int64(ret)) * time.Millisecond})
+	aj.onProgressFunc(Progress{aj.position, aj.jobs.Len(), time.Duration((time.Since(aj.startTimer).Nanoseconds()/int64(aj.position))*int64(ret)) * time.Nanosecond})
 }
 
 // _Next allows you to retrieve the next job
