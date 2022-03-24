@@ -2,30 +2,30 @@ package asyncjob
 
 import (
 	"fmt"
-	"reflect"
 	"runtime"
 	"sync"
 	"time"
 )
 
 // AsyncJob is a representation of AsyncJob processus
-type AsyncJob struct {
+type AsyncJob[T any] struct {
 	mu             sync.Mutex
 	wg             sync.WaitGroup
 	workers        int
-	onJob          func(job Job) error
+	onJob          func(job Job[T]) error
 	onProgressFunc func(progress Progress)
-	jobs           reflect.Value
+	jobs           []T
 	position       int
-	queueJob       chan Job
+	queueJob       chan Job[T]
 	errors         chan error
 	startTimer     time.Time
 }
 
 // New allows you to retrieve a new instance of AsyncJob
-func New() *AsyncJob {
+func New[T any]() *AsyncJob[T] {
 	// new instance of AsyncJob
-	aj := new(AsyncJob)
+
+	aj := new(AsyncJob[T])
 	// set default concurrency with num cpu value
 	aj.SetWorkers(runtime.NumCPU())
 	// create channel for jobs error
@@ -35,39 +35,32 @@ func New() *AsyncJob {
 }
 
 // SetWorkers allows you to set the number of asynchronous jobs
-func (aj *AsyncJob) SetWorkers(workers int) *AsyncJob {
+func (aj *AsyncJob[T]) SetWorkers(workers int) *AsyncJob[T] {
 	aj.workers = workers
 	return aj
 }
 
 // GetWorkers allows you to retrieve the number of workers
-func (aj *AsyncJob) GetWorkers() int {
+func (aj *AsyncJob[T]) GetWorkers() int {
 	return aj.workers
 }
 
 // Run allows you to start the process
-func (aj *AsyncJob) Run(listener func(job Job) error, data interface{}) (err error) {
-	s := reflect.ValueOf(data)
-	if s.Kind() != reflect.Slice {
-		return fmt.Errorf("invalid input data : got %v want: slice", s.Kind())
-	}
-	if listener == nil {
-		return fmt.Errorf("the listener cannot be null because it is used to process jobs")
-	}
-	aj.jobs = s
+func (aj *AsyncJob[T]) Run(listener func(job Job[T]) error, data []T) (err error) {
+	aj.jobs = data
 	aj.onJob = listener
 
 	return aj._Process()
 }
 
 // OnProgress allows you set callback function for ETA
-func (aj *AsyncJob) OnProgress(onProgressFunc func(progress Progress)) *AsyncJob {
+func (aj *AsyncJob[T]) OnProgress(onProgressFunc func(progress Progress)) *AsyncJob[T] {
 	aj.onProgressFunc = onProgressFunc
 
 	// return current instance for chaining method
 	return aj
 }
-func (aj *AsyncJob) _Progress() {
+func (aj *AsyncJob[T]) _Progress() {
 	// we save time if the anonymous function is not initialized
 	if aj.onProgressFunc == nil {
 		return
@@ -81,47 +74,49 @@ func (aj *AsyncJob) _Progress() {
 		return
 	}
 	// jobs finished
-	if aj.jobs.Len() == aj.position {
+	size := len(aj.jobs)
+	if size == aj.position {
 		return
 	}
 	// we calculate the remaining jobs
-	ret := aj.jobs.Len() - aj.position
+	ret := size - aj.position
 
 	// call the anonymous function with data
-	aj.onProgressFunc(Progress{aj.position, aj.jobs.Len(), time.Duration((time.Since(aj.startTimer).Nanoseconds()/int64(aj.position))*int64(ret)) * time.Nanosecond})
+	aj.onProgressFunc(Progress{aj.position, size, time.Duration((time.Since(aj.startTimer).Nanoseconds()/int64(aj.position))*int64(ret)) * time.Nanosecond})
 }
 
 // _Next allows you to retrieve the next job
-func (aj *AsyncJob) _Next() {
+func (aj *AsyncJob[T]) _Next() {
 	aj.mu.Lock()
 	defer aj.mu.Unlock()
 
-	if aj.position == aj.jobs.Len() {
+	if aj.position == len(aj.jobs) {
 		return
 	}
 	aj.wg.Add(1)
-	aj.queueJob <- Job{index: aj.position, data: aj.jobs.Index(aj.position).Interface()}
+
+	aj.queueJob <- Job[T]{index: aj.position, data: aj.jobs[aj.position]}
 	aj.position = aj.position + 1
 }
-func (aj *AsyncJob) _SetError(err error) {
+func (aj *AsyncJob[T]) _SetError(err error) {
 	aj.errors <- err
 }
-func (aj *AsyncJob) _Process() error {
+func (aj *AsyncJob[T]) _Process() error {
 	// if jobs is empty.
-	if aj.jobs.Len() == 0 {
+	if len(aj.jobs) == 0 {
 		return nil
 	}
 	// start timer
 	aj.startTimer = time.Now()
 	// create channel for jobs
-	aj.queueJob = make(chan Job)
+	aj.queueJob = make(chan Job[T])
 
 	// create channel for wait group
 	waitCh := make(chan bool, 1)
 	go func() {
 		// for each job into the queue
 		for job := range aj.queueJob {
-			go func(job Job) {
+			go func(job Job[T]) {
 				defer aj.wg.Done()
 				// call the anonymous function for recovered error
 				defer func() {
@@ -152,7 +147,7 @@ func (aj *AsyncJob) _Process() error {
 
 	// the number of jobs for the start-up is calculated
 	max := aj.GetWorkers()
-	size := aj.jobs.Len()
+	size := len(aj.jobs)
 	if size <= max {
 		max = size
 	}

@@ -28,7 +28,7 @@ import (
 
 func main() {
 	// Create a new AsyncJob
-	asj := asyncjob.New()
+	asj := asyncjob.New[string]()
 
 	// Set the number of asynchronous tasks (default: runtime.NumCPU())
 	asj.SetWorkers(2)
@@ -39,7 +39,7 @@ func main() {
 	})
 
 	// Run all jobs 
-	err := asj.Run(func(job asyncjob.Job) error {
+	err := asj.Run(func(job asyncjob.Job[string]) error {
             // receive the job in job data function
             // if err return or panic, the job will be marked as failed and all progress will be canceled
             return nil
