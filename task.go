@@ -1,17 +1,17 @@
 package asyncjob
 
 // Job is a representation of a unitary work
-type Job struct {
+type Job[T any] struct {
 	index int
-	data  interface{}
+	data  T
 }
 
 // Data is the value of a job
-func (j Job) Data() interface{} {
+func (j Job[T]) Data() T {
 	return j.data
 }
 
 // Index the index of the original slice
-func (j Job) Index() int {
+func (j Job[T]) Index() int {
 	return j.index
 }

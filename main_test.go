@@ -10,43 +10,30 @@ import (
 )
 
 // function for print log with testing instance
-func LogJob(t *testing.T, job Job) {
-	t.Logf("OnJob=%s key=%d", job.Data(), job.Index())
+func LogJob[T any](t *testing.T, job Job[T]) {
+	t.Logf("OnJob=%T key=%d", job.Data(), job.Index())
 }
 
 func TestNew(t *testing.T) {
 	t.Run("Run with empty slice data", func(t *testing.T) {
-		err := New().
-			Run(func(job Job) error {
+		err := New[string]().
+			Run(func(job Job[string]) error {
 				return nil
 			}, []string{})
 		if assert.Nil(t, err) {
 			return
 		}
 	})
-	t.Run("Run with nil listener", func(t *testing.T) {
-		err := New().Run(nil, []string{})
-		if !assert.NotNil(t, err) {
-			return
-		}
-	})
-	t.Run("Run with nil no slice data", func(t *testing.T) {
-		err := New().Run(nil, 1)
-		if !assert.NotNil(t, err) {
-			return
-		}
-		assert.Equal(t, "invalid input data : got int want: slice", err.Error())
-	})
 	t.Run("Run with valid listener", func(t *testing.T) {
 		var m sync.Mutex
 		var found = make([]string, 2)
 		var list = []string{"Hello", "World"}
-		err := New().
-			Run(func(job Job) error {
+		err := New[string]().
+			Run(func(job Job[string]) error {
 				m.Lock()
 				defer m.Unlock()
 				LogJob(t, job)
-				found[job.Index()] = job.Data().(string)
+				found[job.Index()] = job.Data()
 				return nil
 			}, list)
 
@@ -59,11 +46,11 @@ func TestNew(t *testing.T) {
 		var m sync.Mutex
 		var found = make([]string, 2)
 		var list = []string{"Hello", "World"}
-		err := New().Run(func(job Job) error {
+		err := New[string]().Run(func(job Job[string]) error {
 			m.Lock()
 			defer m.Unlock()
 			LogJob(t, job)
-			found[job.Index()] = job.Data().(string)
+			found[job.Index()] = job.Data()
 			panic("i'm panic")
 			return nil
 		}, list)
@@ -76,11 +63,11 @@ func TestNew(t *testing.T) {
 		var m sync.Mutex
 		var found = make([]string, 2)
 		var list = []string{"Hello", "World"}
-		err := New().Run(func(job Job) error {
+		err := New[string]().Run(func(job Job[string]) error {
 			m.Lock()
 			defer m.Unlock()
 			LogJob(t, job)
-			found[job.Index()] = job.Data().(string)
+			found[job.Index()] = job.Data()
 			return errors.New("i'm a error")
 		}, list)
 		if !assert.NotNil(t, err) {
@@ -96,12 +83,12 @@ func TestNew(t *testing.T) {
 			list = append(list, i)
 		}
 
-		err := New().
+		err := New[int]().
 			OnProgress(func(progress Progress) {}).
-			Run(func(job Job) error {
+			Run(func(job Job[int]) error {
 				m.Lock()
 				defer m.Unlock()
-				found[job.Index()] = job.Data().(int)
+				found[job.Index()] = job.Data()
 				return nil
 			}, list)
 
@@ -121,10 +108,10 @@ func TestNew(t *testing.T) {
 			d = d + time.Duration(i)*time.Millisecond
 		}
 		startTimer := time.Now()
-		err := New().Run(func(job Job) error {
+		err := New[int]().Run(func(job Job[int]) error {
 			m.Lock()
 			defer m.Unlock()
-			found[job.Index()] = job.Data().(int)
+			found[job.Index()] = job.Data()
 			time.Sleep(time.Duration(job.Index()) * time.Millisecond)
 			return nil
 		}, list)
@@ -149,7 +136,7 @@ func TestNew(t *testing.T) {
 	})
 	t.Run("Reliability testing ", func(t *testing.T) {
 		var list []time.Duration
-		var final []Job
+		var final []Job[time.Duration]
 		var m sync.Mutex
 		for i := 1; i <= 4; i++ {
 			if i == 1 {
@@ -164,13 +151,13 @@ func TestNew(t *testing.T) {
 		}
 		log.Print(list)
 		startTimer := time.Now()
-		err := New().SetWorkers(2).Run(func(job Job) error {
+		err := New[time.Duration]().SetWorkers(2).Run(func(job Job[time.Duration]) error {
 			m.Lock()
-			t.Logf("Starting Index:%d Time:%f D:%d", job.Index(), time.Since(startTimer).Seconds(), job.Data().(time.Duration))
+			t.Logf("Starting Index:%d Time:%f D:%d", job.Index(), time.Since(startTimer).Seconds(), job.Data())
 			final = append(final, job)
 			m.Unlock()
-			time.Sleep(job.Data().(time.Duration))
-			t.Logf("Ending Index:%d Time:%f D:%d", job.Index(), time.Since(startTimer).Seconds(), job.Data().(time.Duration))
+			time.Sleep(job.Data())
+			t.Logf("Ending Index:%d Time:%f D:%d", job.Index(), time.Since(startTimer).Seconds(), job.Data())
 			m.Lock()
 			final = append(final, job)
 			m.Unlock()
@@ -185,29 +172,29 @@ func TestNew(t *testing.T) {
 		assert.True(t, time.Since(startTimer).Seconds() >= 2)
 		log.Print(final)
 
-		assert.Equal(t, final[0].Data().(time.Duration), time.Duration(1)*time.Second)
+		assert.Equal(t, final[0].Data(), time.Duration(1)*time.Second)
 		assert.Equal(t, final[0].Index(), 0)
 
 		assert.Equal(t, final[1].Index(), 1)
-		assert.Equal(t, final[1].Data().(time.Duration), time.Duration(0)*time.Second)
+		assert.Equal(t, final[1].Data(), time.Duration(0)*time.Second)
 
 		assert.Equal(t, final[2].Index(), 1)
-		assert.Equal(t, final[2].Data().(time.Duration), time.Duration(0)*time.Second)
+		assert.Equal(t, final[2].Data(), time.Duration(0)*time.Second)
 
 		assert.Equal(t, final[3].Index(), 2)
-		assert.Equal(t, final[3].Data().(time.Duration), time.Duration(2)*time.Second)
+		assert.Equal(t, final[3].Data(), time.Duration(2)*time.Second)
 
 		assert.Equal(t, final[4].Index(), 0)
-		assert.Equal(t, final[4].Data().(time.Duration), time.Duration(1)*time.Second)
+		assert.Equal(t, final[4].Data(), time.Duration(1)*time.Second)
 
 		assert.Equal(t, final[5].Index(), 3)
-		assert.Equal(t, final[5].Data().(time.Duration), time.Duration(0)*time.Second)
+		assert.Equal(t, final[5].Data(), time.Duration(0)*time.Second)
 
 		assert.Equal(t, final[6].Index(), 3)
-		assert.Equal(t, final[6].Data().(time.Duration), time.Duration(0)*time.Second)
+		assert.Equal(t, final[6].Data(), time.Duration(0)*time.Second)
 
 		assert.Equal(t, final[7].Index(), 2)
-		assert.Equal(t, final[7].Data().(time.Duration), time.Duration(2)*time.Second)
+		assert.Equal(t, final[7].Data(), time.Duration(2)*time.Second)
 	})
 	t.Run("Testing eta", func(t *testing.T) {
 		var list []time.Duration
@@ -215,14 +202,14 @@ func TestNew(t *testing.T) {
 			list = append(list, time.Duration(1)*time.Second)
 		}
 		var result []float64
-		err := New().
+		err := New[time.Duration]().
 			SetWorkers(2).
 			OnProgress(func(progress Progress) {
 				t.Log(progress.Current(), progress.Total(), progress.EstimateTimeLeft(), progress)
 				result = append(result, progress.EstimateTimeLeft().Seconds())
 			}).
-			Run(func(job Job) error {
-				time.Sleep(job.Data().(time.Duration))
+			Run(func(job Job[time.Duration]) error {
+				time.Sleep(job.Data())
 				return nil
 			}, list)
 
@@ -241,7 +228,7 @@ func TestNew(t *testing.T) {
 			list = append(list, time.Duration(1)*time.Microsecond)
 		}
 		var result []float64
-		err := New().
+		err := New[time.Duration]().
 			SetWorkers(2).
 			OnProgress(func(progress Progress) {
 				if progress.Current()%1000 != 0 {
@@ -250,8 +237,8 @@ func TestNew(t *testing.T) {
 				t.Log(progress.Current(), progress.Total(), progress.EstimateTimeLeft(), progress)
 				result = append(result, progress.EstimateTimeLeft().Seconds())
 			}).
-			Run(func(job Job) error {
-				time.Sleep(job.Data().(time.Duration))
+			Run(func(job Job[time.Duration]) error {
+				time.Sleep(job.Data())
 				return nil
 			}, list)
 
