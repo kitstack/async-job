@@ -1,4 +1,5 @@
 [![Go](https://github.com/lab210-dev/async-job/actions/workflows/go.yml/badge.svg)](https://github.com/lab210-dev/async-job/actions/workflows/go.yml)
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/lab210-dev/async-job)
 [![Go Report Card](https://goreportcard.com/badge/github.com/lab210-dev/async-job)](https://goreportcard.com/report/github.com/lab210-dev/async-job)
 [![codecov](https://codecov.io/gh/lab210-dev/async-job/branch/main/graph/badge.svg?token=3JRL5ZLSIH)](https://codecov.io/gh/lab210-dev/async-job)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/lab210-dev/async-job/blob/main/LICENSE)
@@ -71,7 +72,7 @@ func main() {
 	for i := 1; i <= 100; i++ {
 		list = append(list, time.Duration(1)*time.Millisecond)
 	}
-	err := asyncjob.New().
+	err := asyncjob.New[time.Duration]().
 		SetWorkers(2).
 		OnProgress(func(progress asyncjob.Progress) {
 			// Eta will be displayed every 10 jobs
@@ -81,9 +82,9 @@ func main() {
 			// print the eta
 		    log.Printf("Progress: %s\n", progress.String())
 		}).
-		Run(func(job asyncjob.Job) error {
+		Run(func(job asyncjob.Job[time.Duration]) error {
 			// slow down the job
-			time.Sleep(job.Data().(time.Duration))
+			time.Sleep(job.Data())
 			return nil
 		}, list)
 	
